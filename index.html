@@ -12,6 +12,8 @@
             top: 10px;
             left: 10px;
             z-index: 100;
+            display: flex;
+            align-items: center;
         }
         
         .button-container button {
@@ -28,6 +30,15 @@
         .button-container button:hover {
             background-color: #0055cc;
         }
+
+        #fileSizeIndicator {
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            color: #ffffff;
+            margin-left: 10px;
+            /* 3. Add a minimum width to prevent UI jitter */
+            min-width: 150px; 
+        }
         
         .lil-gui {
             z-index: 101 !important; 
@@ -37,7 +48,9 @@
 <body>
     <div class="button-container">
         <button id="exportButton">Export as STL</button>
-        <button id="regenButton">Regenerate</button> </div>
+        <button id="regenButton">Regenerate</button>
+        <span id="fileSizeIndicator"></span>
+    </div>
 
     <script type="importmap">
         {
@@ -60,6 +73,12 @@
         let scene, camera, renderer, controls;
         let rippledGeometry, solidMesh;
         const noise2D = createNoise2D();
+        
+        // 1. Add a debounce timer variable
+        let debounceTimer;
+
+        const fileSizeIndicator = document.getElementById('fileSizeIndicator');
+        const exporter = new STLExporter(); // 4. Init exporter once
 
         const params = {
             AMPLITUDE: 0.8,
@@ -72,7 +91,7 @@
             BOX_DEPTH: 10,
             WIDTH_SEGMENTS: 5,
             DEPTH_SEGMENTS: 5,
-            SEED_X: 0, // 3. Add seed params
+            SEED_X: 0, 
             SEED_Z: 0
         };
 
@@ -129,33 +148,65 @@
             window.addEventListener('resize', onWindowResize, false);
             document.getElementById('exportButton').addEventListener('click', exportSTL);
             
-            // 4. Add listener for the regenerate button
             document.getElementById('regenButton').addEventListener('click', randomizeSeed);
+            
+            // 2. Show initial file size on load
+            updateFileSizePreview();
             
             animate();
         }
 
-        // 5. New function to randomize the seed and regenerate
         function randomizeSeed() {
-            // Set seeds to large random values
             params.SEED_X = Math.random() * 1000;
             params.SEED_Z = Math.random() * 1000;
             
-            // Re-build the mesh
+            // 6. This now handles the debounced update automatically
             regenerateMesh();
         }
 
+        // 3. This function is now the trigger for the debounced update
         function regenerateMesh() {
             const newGeometry = createRippledBox();
             rippledGeometry.dispose();
             rippledGeometry = newGeometry;
             solidMesh.geometry = rippledGeometry;
+
+            // --- Debounced File Size Update Logic ---
+            clearTimeout(debounceTimer);
+            if(fileSizeIndicator) fileSizeIndicator.textContent = 'Calculating size...';
+            
+            // Set a new timer to run the update function after 300ms
+            debounceTimer = setTimeout(updateFileSizePreview, 300); 
+        }
+        
+        // 4. New function to calculate and display the file size
+        function updateFileSizePreview() {
+            // Generate the STL string in memory
+            const stlString = exporter.parse(solidMesh, { binary: false });
+            // Create a blob to accurately get the size
+            const blob = new Blob([stlString], { type: 'text/plain' });
+            const fileSize = blob.size;
+
+            if(fileSizeIndicator) {
+                fileSizeIndicator.textContent = `Est. Size: ${formatBytes(fileSize)}`;
+            }
         }
 
+        function formatBytes(bytes, decimals = 2) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+        }
+
+        // 5. ExportSTL is now simpler
         function exportSTL() {
-            const exporter = new STLExporter();
             const stlString = exporter.parse(solidMesh, { binary: false });
             const blob = new Blob([stlString], { type: 'text/plain' });
+
+            // The file size is already visible, so we just create the link
             const link = document.createElement('a');
             link.style.display = 'none';
             document.body.appendChild(link);
@@ -166,7 +217,6 @@
             URL.revokeObjectURL(link.href);
         }
 
-        // 6. Update createRippledBox to use the seed params
         function createRippledBox() {
             const geometry = new THREE.BoxGeometry(
                 params.BOX_WIDTH, 
@@ -177,7 +227,7 @@
                 (params.DEPTH_SEGMENTS * params.BOX_DEPTH) / 2.5
             );
 
-            console.log(params.DEPTH_SEGMENTS * params.BOX_DEPTH);
+            // console.log(params.DEPTH_SEGMENTS * params.BOX_DEPTH); // This log is still here
 
             const positionAttribute = geometry.attributes.position;
             const originalY = params.BOX_HEIGHT / 2.0;
@@ -189,7 +239,6 @@
                     const x = positionAttribute.getX(i);
                     const z = positionAttribute.getZ(i);
 
-                    // --- Thickness Logic (with seed) ---
                     const amplitudeMultiplier = (noise2D(
                         x * params.THICKNESS_VARIATION_FREQ + params.SEED_X, 
                         z * params.THICKNESS_VARIATION_FREQ + params.SEED_Z
@@ -197,20 +246,17 @@
                     
                     const finalAmplitude = params.AMPLITUDE * (0.2 + amplitudeMultiplier * 0.8);
                     
-                    // --- Undulation Logic (with seed) ---
                     const undulation = noise2D(
                         x * params.UNDULATION_FREQUENCY + params.SEED_X, 
                         z * params.UNDULATION_FREQUENCY + params.SEED_Z
                     ) * params.UNDULATION_STRENGTH;
                     
-                    // --- Main Wave Logic (with seed) ---
                     const mainWaveX = x + undulation;
                     const noiseVal = noise2D(
                         mainWaveX * params.WAVE_FREQUENCY + params.SEED_X, 
-                        0.0 + params.SEED_Z // <-- Apply seed offset to second param
+                        0.0 + params.SEED_Z 
                     );
                     
-                    // --- Final Offset ---
                     const offset = finalAmplitude * noiseVal;
                     
                     positionAttribute.setY(i, y + offset);
