@@ -43,6 +43,30 @@
         .lil-gui {
             z-index: 101 !important; 
         }
+
+        footer {
+            position: absolute;
+            bottom: 10px;
+            width: 100%;
+            text-align: center;
+            z-index: 100;
+            color: #aaa;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            text-decoration: none;
+        }
+
+        footer a:visited {
+            color: #aaa;
+        }
+
+        footer a {
+            text-decoration: underline;
+        }
+
+        footer a:hover {
+            color: #fff;
+        }
     </style>
 </head>
 <body>
@@ -51,7 +75,9 @@
         <button id="regenButton">Regenerate</button>
         <span id="fileSizeIndicator"></span>
     </div>
-
+    <footer>
+        Made with love by <a href="https://instagram.com/mapleandwalnut.co">Maple and Walnut Co.</a>
+    </footer>
     <script type="importmap">
         {
             "imports": {
