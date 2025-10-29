@@ -157,7 +157,7 @@
             
             const dimFolder = gui.addFolder('Dimensions');
             dimFolder.add(params, 'BOX_WIDTH', 1, 2000).name('Width').onChange(regenerateMesh);
-            dimFolder.add(params, 'BOX_HEIGHT', 1, 10).name('Height').onChange(regenerateMesh);
+            dimFolder.add(params, 'BOX_HEIGHT', 0.1, 10.0).name('Height').onChange(regenerateMesh);
             dimFolder.add(params, 'BOX_DEPTH', 1, 2000).name('Depth').onChange(regenerateMesh);
 
             const resFolder = gui.addFolder('Resolution');
