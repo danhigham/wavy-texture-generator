@@ -36,8 +36,8 @@
             font-size: 14px;
             color: #ffffff;
             margin-left: 10px;
-            /* 3. Add a minimum width to prevent UI jitter */
-            min-width: 150px; 
+            /* 1. Increased min-width for longer text */
+            min-width: 300px; 
         }
         
         .lil-gui {
@@ -50,20 +50,15 @@
             width: 100%;
             text-align: center;
             z-index: 100;
-            color: #aaa;
+        }
+        
+        footer a {
             font-family: Arial, sans-serif;
             font-size: 14px;
+            color: #aaa;
             text-decoration: none;
         }
-
-        footer a:visited {
-            color: #aaa;
-        }
-
-        footer a {
-            text-decoration: underline;
-        }
-
+        
         footer a:hover {
             color: #fff;
         }
@@ -75,9 +70,11 @@
         <button id="regenButton">Regenerate</button>
         <span id="fileSizeIndicator"></span>
     </div>
+
     <footer>
-        Made with love by <a href="https://instagram.com/mapleandwalnut.co">Maple and Walnut Co.</a>
+        <a href="#" target="_blank">Made with love by Maple and Walnut Co.</a>
     </footer>
+
     <script type="importmap">
         {
             "imports": {
@@ -100,11 +97,10 @@
         let rippledGeometry, solidMesh;
         const noise2D = createNoise2D();
         
-        // 1. Add a debounce timer variable
         let debounceTimer;
 
         const fileSizeIndicator = document.getElementById('fileSizeIndicator');
-        const exporter = new STLExporter(); // 4. Init exporter once
+        const exporter = new STLExporter();
 
         const params = {
             AMPLITUDE: 0.8,
@@ -145,7 +141,8 @@
             scene.add(directionalLight);
 
             rippledGeometry = createRippledBox();
-
+            rippledGeometry.computeBoundingBox(); // 2. Compute BBox on init
+            
             const material = new THREE.MeshStandardMaterial({ 
                 color: 0x0077ff,
                 roughness: 1.3
@@ -157,7 +154,7 @@
             
             const dimFolder = gui.addFolder('Dimensions');
             dimFolder.add(params, 'BOX_WIDTH', 1, 2000).name('Width').onChange(regenerateMesh);
-            dimFolder.add(params, 'BOX_HEIGHT', 0.1, 10.0).name('Height').onChange(regenerateMesh);
+            dimFolder.add(params, 'BOX_HEIGHT', 0.1, 10).name('Height').onChange(regenerateMesh);
             dimFolder.add(params, 'BOX_DEPTH', 1, 2000).name('Depth').onChange(regenerateMesh);
 
             const resFolder = gui.addFolder('Resolution');
@@ -176,7 +173,6 @@
             
             document.getElementById('regenButton').addEventListener('click', randomizeSeed);
             
-            // 2. Show initial file size on load
             updateFileSizePreview();
             
             animate();
@@ -186,35 +182,47 @@
             params.SEED_X = Math.random() * 1000;
             params.SEED_Z = Math.random() * 1000;
             
-            // 6. This now handles the debounced update automatically
             regenerateMesh();
         }
 
-        // 3. This function is now the trigger for the debounced update
         function regenerateMesh() {
             const newGeometry = createRippledBox();
+            
+            // 2. Compute the bounding box *after* creating the geometry
+            newGeometry.computeBoundingBox(); 
+            
             rippledGeometry.dispose();
             rippledGeometry = newGeometry;
             solidMesh.geometry = rippledGeometry;
 
-            // --- Debounced File Size Update Logic ---
             clearTimeout(debounceTimer);
-            if(fileSizeIndicator) fileSizeIndicator.textContent = 'Calculating size...';
+            if(fileSizeIndicator) {
+                // Show base dimensions as placeholder
+                const dims = `(${params.BOX_WIDTH} x ${params.BOX_HEIGHT} x ${params.BOX_DEPTH})`;
+                fileSizeIndicator.textContent = `Calculating... ${dims}`;
+            }
             
-            // Set a new timer to run the update function after 300ms
             debounceTimer = setTimeout(updateFileSizePreview, 300); 
         }
         
-        // 4. New function to calculate and display the file size
         function updateFileSizePreview() {
-            // Generate the STL string in memory
             const stlString = exporter.parse(solidMesh, { binary: false });
-            // Create a blob to accurately get the size
             const blob = new Blob([stlString], { type: 'text/plain' });
             const fileSize = blob.size;
 
             if(fileSizeIndicator) {
-                fileSizeIndicator.textContent = `Est. Size: ${formatBytes(fileSize)}`;
+                // 3. Get the calculated bounding box
+                const bbox = solidMesh.geometry.boundingBox;
+                
+                // 3. Calculate actual dimensions
+                const width = bbox.max.x - bbox.min.x;
+                const height = bbox.max.y - bbox.min.y;
+                const depth = bbox.max.z - bbox.min.z;
+                
+                // 3. Format dimensions to 2 decimal places
+                const dims = `(${width.toFixed(2)} x ${height.toFixed(2)} x ${depth.toFixed(2)})`;
+                
+                fileSizeIndicator.textContent = `Est. Size: ${formatBytes(fileSize)} ${dims}`;
             }
         }
 
@@ -227,12 +235,10 @@
             return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
         }
 
-        // 5. ExportSTL is now simpler
         function exportSTL() {
             const stlString = exporter.parse(solidMesh, { binary: false });
             const blob = new Blob([stlString], { type: 'text/plain' });
 
-            // The file size is already visible, so we just create the link
             const link = document.createElement('a');
             link.style.display = 'none';
             document.body.appendChild(link);
@@ -253,7 +259,7 @@
                 (params.DEPTH_SEGMENTS * params.BOX_DEPTH) / 2.5
             );
 
-            // console.log(params.DEPTH_SEGMENTS * params.BOX_DEPTH); // This log is still here
+            // console.log(params.DEPTH_SEGMENTS * params.BOX_DEPTH);
 
             const positionAttribute = geometry.attributes.position;
             const originalY = params.BOX_HEIGHT / 2.0;
@@ -292,6 +298,8 @@
             positionAttribute.needsUpdate = true;
             geometry.computeVertexNormals();
 
+            // Note: computeBoundingBox() is now called in regenerateMesh()
+            // after this function returns.
             return geometry;
         }
 
